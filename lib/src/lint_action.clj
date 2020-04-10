@@ -3,8 +3,8 @@
             [environ.core :refer [env]]
             [clj-http.client :as client]
             [clj-time.core :as clj-time]
-            [clojure.string :as str])
-  (:use [clojure.java.shell :only (sh)]))
+            [clojure.string :as str]
+            [clojure.java.shell :refer [sh]]))
 
 (def check-name "my-clj-lint-action check")
 
@@ -39,24 +39,24 @@
         (get "id"))))
 
 (defn update-action [id conclusion output]
-   (client/patch
-      (str "https://api.github.com/repos/"
-           (env :github-repository)
-           "/check-runs/"
-           id)
-      {:headers (make-header)
-       :content-type :json
-       :body
-       (cheshire/generate-string
-        {:name check-name
-         :head_sha (env :github-sha)
-         :status "completed"
-         :completed_at (str (clj-time/now))
-         :conclusion conclusion
-         :output
-         {:title check-name
-          :summary "Results of linters."
-          :annotations output}})}))
+  (client/patch
+   (str "https://api.github.com/repos/"
+        (env :github-repository)
+        "/check-runs/"
+        id)
+   {:headers (make-header)
+    :content-type :json
+    :body
+    (cheshire/generate-string
+     {:name check-name
+      :head_sha (env :github-sha)
+      :status "completed"
+      :completed_at (str (clj-time/now))
+      :conclusion conclusion
+      :output
+      {:title check-name
+       :summary "Results of linters."
+       :annotations output}})}))
 
 (defn run-clj-kondo [dir]
   (let [kondo-result (sh "/usr/local/bin/clj-kondo" "--lint" dir)
@@ -130,7 +130,7 @@
          (map (fn [line]
                 (let [message-lines (str/split-lines line)
                       first-line (first message-lines)
-                      message (str/join "\\n" (next message-lines))]
+                      message (str/join "\n" (next message-lines))]
                   (when-let [line-decompose (re-matches #"At (.*?):(\d*?):$" first-line)]
                     {:path (second line-decompose)
                      :start_line (Integer. (nth line-decompose 2))
@@ -168,6 +168,6 @@
                      fix-option)
          lint-result (run-linters (:linters option)
                                   (:cwd option))]
-        (update-action id
-                       (if (empty? lint-result) "success" "neutral")
-                       lint-result))))
+     (update-action id
+                    (if (empty? lint-result) "success" "neutral")
+                    lint-result))))
