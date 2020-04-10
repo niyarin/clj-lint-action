@@ -78,7 +78,7 @@
     (when (zero? (:exit files))
       (str/split-lines (:out files)))))
 
-(defn run-cljfmt [files]
+(defn run-cljfmt [files cwd]
   (let [cljfmt-result (sh "sh"
                           "-c"
                           (str
@@ -89,7 +89,7 @@
            str/split-lines
            (filter #(re-matches #"--- a(.*clj)$" %))
            (map (fn [line]
-                  {:path (subs line (count "--- a"))
+                  {:path (subs line (count (str "--- a" cwd)))
                    :start_line 0
                    :end_line 0
                    :annotation_level "warning"
@@ -155,7 +155,7 @@
        (map #(case %
                "eastwood" (run-eastwood dir)
                "kibit" (run-kibit dir)
-               "cljfmt" (run-cljfmt (get-files dir))
+               "cljfmt" (run-cljfmt (get-files dir) dir)
                "clj-kondo" (run-clj-kondo dir)))
        (apply concat)))
 
