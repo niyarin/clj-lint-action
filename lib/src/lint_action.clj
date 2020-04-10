@@ -4,13 +4,14 @@
             [clj-http.client :as client]
             [clj-time.core :as clj-time]
             [clojure.string :as str]
+            [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
 (def check-name "my-clj-lint-action check")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
                        :keyword-typos :local-shadows-var :misplaced-docstrings
-                       :no-ns-form-found :non-clojure-file :redefd-vars
+                       :no-ns-form-found :redefd-vars
                        :suspicious-expression :suspicious-test :unlimited-use
                        :unused-fn-args :unused-locals :unused-meta-on-macro
                        :unused-namespaces :unused-private-vars :unused-ret-vals
@@ -35,8 +36,7 @@
                                     :head_sha (env :github-sha)
                                     :status "in_progress"
                                     :started_at (str (clj-time/now))})})]
-    (-> (cheshire/parse-string (:body post-result))
-        (get "id"))))
+    (get (cheshire/parse-string (:body post-result)) "id")))
 
 (defn update-action [id conclusion output]
   (client/patch
@@ -67,8 +67,8 @@
          (map (fn [line]
                 (when-let [matches (re-matches #"^(.*?)\:(\d*?)\:(\d*?)\:([a-z ]*)\:(.*)" line)]
                   {:path (subs (second matches) (count dir))
-                   :start_line (Integer. (nth matches 2))
-                   :end_line (Integer. (nth matches 2))
+                   :start_line (Integer/valueOf (nth matches 2))
+                   :end_line (Integer/valueOf (nth matches 2))
                    :annotation_level "warning"
                    :message (str "[clj-kondo]" (nth matches 5))})))
          (filter identity))))
@@ -84,7 +84,7 @@
                           (str
                            "clojure -Sdeps \"{:deps {cljfmt {:mvn/version \\\"RELEASE\\\" }}}\" -m cljfmt.main check "
                            (str/join " " files)))]
-    (when (not (zero? (:exit cljfmt-result)))
+    (when-not (zero? (:exit cljfmt-result))
       (->> (:err cljfmt-result)
            str/split-lines
            (filter #(re-matches #"--- a(.*clj)$" %))
@@ -112,8 +112,8 @@
                                      "[" (str/trim (nth matches 4)) "]"
                                      (nth matches 5))]
                     {:path (second matches)
-                     :start_line (Integer. (nth matches 2))
-                     :end_line (Integer. (nth matches 2))
+                     :start_line (Integer/valueOf (nth matches 2))
+                     :end_line (Integer/valueOf (nth matches 2))
                      :annotation_level "warning"
                      :message message}))))
          (filter identity))))
@@ -133,13 +133,15 @@
                       message (str/join "\n" (next message-lines))]
                   (when-let [line-decompose (re-matches #"At (.*?):(\d*?):$" first-line)]
                     {:path (second line-decompose)
-                     :start_line (Integer. (nth line-decompose 2))
+                     :start_line (Integer/valueOf (nth line-decompose 2))
                      :annotation_level "warning"
-                     :end_line (Integer. (nth line-decompose 2))
+                     :end_line (Integer/valueOf (nth line-decompose 2))
                      :message (str "[kibit]\n" message)}))))
          (filter identity))))
 
-(def default-option {:linters "all" :cwd "./"})
+(def default-option {:linters "all"
+                     :cwd "./"
+                     :mode :cli})
 
 (defn- fix-option [option]
   (->> option
@@ -159,15 +161,26 @@
                "clj-kondo" (run-clj-kondo dir)))
        (apply concat)))
 
+(defn external-run [arg-map]
+  (let [option (->> arg-map
+                    (merge default-option)
+                    fix-option)]
+    (run-linters (:linters option)
+                 (:cwd option))))
+
+(defn- output-lint-result [lint-result]
+  (doseq [annotation lint-result]
+    (println (format " %s:%d" (:path annotation) (:start_line annotation)))
+    (println (:message annotation))
+    (println "")))
+
 (defn -main
   ([] (-main (pr-str default-option)))
   ([arg-string]
-   (let [id (start-action)
-         option (->> (clojure.edn/read-string arg-string)
-                     (merge default-option)
-                     fix-option)
-         lint-result (run-linters (:linters option)
-                                  (:cwd option))]
-     (update-action id
-                    (if (empty? lint-result) "success" "neutral")
-                    lint-result))))
+   (let [parsed-option (edn/read-string arg-string)
+         id (when (= (:mode parsed-option) :github-action) (start-action))
+         lint-result (external-run parsed-option)
+         conclusion (if (empty? lint-result) "success" "neutral")]
+     (if (= (:mode parsed-option) :github-action)
+       (update-action id  conclusion lint-result)
+       (output-lint-result lint-result)))))
