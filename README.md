@@ -13,3 +13,11 @@ Run some linters such as clj-kondo , kibit , eastwood and show results as warnin
         linters: "\"all\""
         github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+## about 'linters'
+
+if you want to select linters,set variable 'linters' like this.
+
+```yaml
+        linters: "[\"clj-kondo\" \"kibit\" \"eastwood\" \"cljfmt\"]"
+```
