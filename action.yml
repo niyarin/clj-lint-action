@@ -7,7 +7,7 @@ inputs:
     default: "\"all\""
   sourceroot:
     description: 'directory name of souce directory'
-    default: ""
+    default: "\"\""
   github_token:
     description: 'Github token to report linter results back to check'
     required: true
