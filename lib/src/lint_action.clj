@@ -141,6 +141,7 @@
 
 (def default-option {:linters "all"
                      :cwd "./"
+                     :source-root ""
                      :mode :cli})
 
 (defn- fix-option [option]
@@ -166,7 +167,7 @@
                     (merge default-option)
                     fix-option)]
     (run-linters (:linters option)
-                 (:cwd option))))
+                 (str (:cwd option) (:source-root option)))))
 
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
