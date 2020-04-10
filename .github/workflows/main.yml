@@ -21,7 +21,7 @@ jobs:
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v1
-    - uses: niyarin/clj-lint-action@v1.0
+    - uses: niyarin/clj-lint-action@v1.1
       with:
         linters: "\"all\""
         github_token: ${{ secrets.GITHUB_TOKEN }}
