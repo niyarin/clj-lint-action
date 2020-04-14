@@ -62,7 +62,7 @@
 (defn run-clj-kondo [dir]
   (let [kondo-result (sh "/usr/local/bin/clj-kondo" "--lint" dir)
         result-lines
-        (when (= (:exit kondo-result) 2)
+        (when (or (= (:exit kondo-result) 2) (= (:exit kondo-result 3)))
           (cstr/split-lines (:out kondo-result)))]
     (->> result-lines
          (map (fn [line]
@@ -71,27 +71,28 @@
                    :start_line (Integer/valueOf (nth matches 2))
                    :end_line (Integer/valueOf (nth matches 2))
                    :annotation_level "warning"
-                   :message (str "[clj-kondo]" (nth matches 5))})))
+                   :message
+                   (str "[clj-kondo]" (nth matches 5))})))
          (filter identity))))
 
 (defn- get-files [dir]
-  (let [files (sh "find" dir "-name" "*.clj" "-printf" "\"%P\n\"")]
+  (let [files (sh "find" dir "-name" "*.clj" "-printf" "%P\n")]
     (when (zero? (:exit files))
       (cstr/split-lines (:out files)))))
 
 (defn- get-diff-files [dir]
-   (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
-                                              "git log  --oneline --no-merges | wc -l"))
-                           :out
-                           cstr/split-lines
-                           first
-                           Integer/valueOf)]
-      (if (< commit-count 2)
-         (get-files dir)
-         (->> (sh "sh" "-c" (str "cd " dir ";"
-                                              "git diff --name-only --relative HEAD HEAD~"))
-              :out
-              cstr/split-lines))))
+  (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
+                                             "git log  --oneline --no-merges | wc -l"))
+                          :out
+                          cstr/split-lines
+                          first
+                          Integer/valueOf)]
+    (if (< commit-count 2)
+      (get-files dir)
+      (->> (sh "sh" "-c" (str "cd " dir ";"
+                              "git diff --name-only --relative HEAD HEAD~"))
+           :out
+           cstr/split-lines))))
 
 (defn run-cljfmt [files cwd]
   (let [cljfmt-result (sh "sh"
@@ -134,9 +135,10 @@
          (filter identity))))
 
 (defn- join-path [& args]
-   (->> (map #(cstr/split % #"/") args)
-        (apply concat)
-        (cstr/join "/")))
+  (->> (filter #(not (empty? %)) args)
+       (map #(cstr/split % #"/"))
+       (apply concat)
+       (cstr/join "/")))
 
 (defn run-kibit [dir files relative-dir]
   (let [eastwood-result (sh
@@ -163,7 +165,7 @@
                      :cwd "./"
                      :relative-dir ""
                      :mode :cli
-                     :file-target :find })
+                     :file-target :find})
 
 (defn- fix-option [option]
   (->> option
@@ -177,13 +179,13 @@
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)]
-     (->> linters
-          (map #(case %
-                  "eastwood" (run-eastwood dir)
-                  "kibit" (run-kibit dir relative-files relative-dir)
-                  "cljfmt" (run-cljfmt absolute-files dir)
-                  "clj-kondo" (run-clj-kondo dir)))
-          (apply concat))))
+    (->> linters
+         (map #(case %
+                 "eastwood" (run-eastwood dir)
+                 "kibit" (run-kibit dir relative-files relative-dir)
+                 "cljfmt" (run-cljfmt absolute-files dir)
+                 "clj-kondo" (run-clj-kondo dir)))
+         (apply concat))))
 
 (defn external-run [arg-map]
   (let [option (->> arg-map
