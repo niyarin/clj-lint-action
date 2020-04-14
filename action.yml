@@ -8,6 +8,9 @@ inputs:
   sourceroot:
     description: 'directory name of souce directory'
     default: "\"\""
+  runner:
+      description: ':leiningen or :clojure.'
+      default: ":clojure"
   github_token:
     description: 'Github token to report linter results back to check'
     required: true
@@ -17,3 +20,4 @@ runs:
   args:
     - ${{ inputs.linters }}
     - ${{ inputs.sourceroot }}
+    - ${{ inputs.runner }}
