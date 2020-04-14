@@ -5,7 +5,6 @@
             [clj-time.core :as clj-time]
             [clojure.string :as cstr]
             [clojure.edn :as edn]
-            [clojure.java.io :as cio]
             [clojure.java.shell :refer [sh]]))
 
 (def check-name "my-clj-lint-action check")
@@ -62,7 +61,7 @@
 (defn run-clj-kondo [dir]
   (let [kondo-result (sh "/usr/local/bin/clj-kondo" "--lint" dir)
         result-lines
-        (when (or (= (:exit kondo-result) 2) (= (:exit kondo-result 3)))
+        (when (or (= (:exit kondo-result) 2) (= (:exit kondo-result) 3))
           (cstr/split-lines (:out kondo-result)))]
     (->> result-lines
          (map (fn [line]
@@ -162,7 +161,7 @@
          (filter identity))))
 
 (defn- join-path [& args]
-  (->> (filter #(not (empty? %)) args)
+  (->> (remove empty? args)
        (map #(cstr/split % #"/"))
        (apply concat)
        (cstr/join "/")))
