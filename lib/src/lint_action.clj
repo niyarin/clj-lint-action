@@ -111,8 +111,8 @@
                    :annotation_level "warning"
                    :message (str "[cljfmt] cljfmt fail." line)}))))))
 
-(defn run-eastwood [dir]
-  (let [eastwood-result (sh
+(defn run-eastwood-clj [dir]
+   (sh
                          "sh" "-c"
                          (str
                           "cd " dir ";"
@@ -120,7 +120,21 @@
                           "-Sdeps " "\" {:deps {jonase/eastwood {:mvn/version \\\"RELEASE\\\" }}}\" "
                           " -m  " "eastwood.lint "
                           (pr-str (pr-str {:source-paths ["src"]
-                                           :linters eastwood-linters}))))]
+                                           :linters eastwood-linters})))))
+
+(defn run-eastwood-lein [dir]
+   (sh "sh" "-c"
+       (str "cd " dir ";"
+            "lein "
+            " update-in :plugins conj \"[jonase/eastwood \\\"0.3.5\\\"]\" "
+            "-- update-in :eastwood assoc :add-linters "  (pr-str (pr-str eastwood-linters))
+            " -- eastwood")))
+
+
+
+
+(defn run-eastwood [dir runner]
+  (let [eastwood-result (if (= runner :leiningen) (run-eastwood-lein dir) (run-eastwood-clj dir))]
     (->> (cstr/split-lines (:out eastwood-result))
          (map (fn [line]
                 (when-let [matches (re-matches #"^(.*?)\:(\d*?)\:(\d*?)\:(.*)\:(.*)" line)]
@@ -141,14 +155,14 @@
        (cstr/join "/")))
 
 (defn run-kibit [dir files relative-dir]
-  (let [eastwood-result (sh
+  (let [kibit-result (sh
                          "sh" "-c"
                          (str
                           "cd " dir ";"
                           "clojure "
                           "-Sdeps " "\" {:deps {tvaughan/kibit-runner {:mvn/version \\\"RELEASE\\\" }}}\" "
                           " -m  " "kibit-runner.cmdline " (cstr/join " " files)))]
-    (->> (cstr/split (:out eastwood-result) #"\n\n")
+    (->> (cstr/split (:out kibit-result) #"\n\n")
          (map (fn [line]
                 (let [message-lines (cstr/split-lines line)
                       first-line (first message-lines)
@@ -165,7 +179,8 @@
                      :cwd "./"
                      :relative-dir ""
                      :mode :cli
-                     :file-target :find})
+                     :file-target :find
+                     :runner :clojure})
 
 (defn- fix-option [option]
   (->> option
@@ -175,13 +190,13 @@
                 :else [k v])))
        (into {})))
 
-(defn- run-linters [linters dir relative-dir file-target]
+(defn- run-linters [linters dir relative-dir file-target runner]
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)]
     (->> linters
          (map #(case %
-                 "eastwood" (run-eastwood dir)
+                 "eastwood" (run-eastwood dir runner)
                  "kibit" (run-kibit dir relative-files relative-dir)
                  "cljfmt" (run-cljfmt absolute-files dir)
                  "clj-kondo" (run-clj-kondo dir)))
@@ -194,7 +209,8 @@
     (run-linters (:linters option)
                  (join-path (:cwd option) (:relative-dir option))
                  (:relative-dir option)
-                 (:file-target option))))
+                 (:file-target option)
+                 (:runner option))))
 
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
