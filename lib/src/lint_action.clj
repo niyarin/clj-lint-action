@@ -58,22 +58,6 @@
        :summary "Results of linters."
        :annotations output}})}))
 
-(defn run-clj-kondo [dir]
-  (let [kondo-result (sh "/usr/local/bin/clj-kondo" "--lint" dir)
-        result-lines
-        (when (or (= (:exit kondo-result) 2) (= (:exit kondo-result) 3))
-          (cstr/split-lines (:out kondo-result)))]
-    (->> result-lines
-         (map (fn [line]
-                (when-let [matches (re-matches #"^(.*?)\:(\d*?)\:(\d*?)\:([a-z ]*)\:(.*)" line)]
-                  {:path (subs (second matches) (count dir))
-                   :start_line (Integer/valueOf (nth matches 2))
-                   :end_line (Integer/valueOf (nth matches 2))
-                   :annotation_level "warning"
-                   :message
-                   (str "[clj-kondo]" (nth matches 5))})))
-         (filter identity))))
-
 (defn- get-files [dir]
   (let [files (sh "find" dir "-name" "*.clj" "-printf" "%P\n")]
     (when (zero? (:exit files))
@@ -108,7 +92,29 @@
                   symbol)
       nil)))
 
-(defn run-cljfmt [files cwd]
+(defn- join-path [& args]
+  (->> (remove empty? args)
+       (map #(cstr/split % #"/"))
+       (apply concat)
+       (cstr/join "/")))
+
+(defn run-clj-kondo [dir files relative-dir]
+  (let [kondo-result (apply sh (concat ["/usr/local/bin/clj-kondo" "--lint"]  files))
+        result-lines
+        (when (or (= (:exit kondo-result) 2) (= (:exit kondo-result) 3))
+          (cstr/split-lines (:out kondo-result)))]
+    (->> result-lines
+         (map (fn [line]
+                (when-let [matches (re-matches #"^(.*?)\:(\d*?)\:(\d*?)\:([a-z ]*)\:(.*)" line)]
+                  {:path (str relative-dir "/" (subs (second matches) (count dir)))
+                   :start_line (Integer/valueOf (nth matches 2))
+                   :end_line (Integer/valueOf (nth matches 2))
+                   :annotation_level "warning"
+                   :message
+                   (str "[clj-kondo]" (nth matches 5))})))
+         (filter identity))))
+
+(defn run-cljfmt [files cwd relative-dir]
   (let [cljfmt-result (sh "sh"
                           "-c"
                           (str
@@ -119,11 +125,13 @@
            cstr/split-lines
            (filter #(re-matches #"--- a(.*clj)$" %))
            (map (fn [line]
-                  {:path (subs line (count (str "--- a" cwd)))
-                   :start_line 0
-                   :end_line 0
-                   :annotation_level "warning"
-                   :message (str "[cljfmt] cljfmt fail." line)}))))))
+                  (let [file (join-path relative-dir
+                                        (subs line (count (str "--- a" cwd))))]
+                    {:path file
+                     :start_line 0
+                     :end_line 0
+                     :annotation_level "warning"
+                     :message (str "[cljfmt] cljfmt fail." file)})))))))
 
 (defn run-eastwood-clj [dir namespaces]
   (sh "sh" "-c"
@@ -159,12 +167,6 @@
                      :annotation_level "warning"
                      :message message}))))
          (filter identity))))
-
-(defn- join-path [& args]
-  (->> (remove empty? args)
-       (map #(cstr/split % #"/"))
-       (apply concat)
-       (cstr/join "/")))
 
 (defn run-kibit [dir files relative-dir]
   (let [kibit-result (sh
@@ -206,6 +208,7 @@
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
+        dir' (str dir "/")
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
@@ -213,8 +216,8 @@
          (map #(case %
                  "eastwood" (run-eastwood dir runner namespaces)
                  "kibit" (run-kibit dir relative-files relative-dir)
-                 "cljfmt" (run-cljfmt absolute-files dir)
-                 "clj-kondo" (run-clj-kondo dir)))
+                 "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
+                 "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
          (apply concat))))
 
 (defn external-run [arg-map]
