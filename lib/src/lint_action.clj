@@ -106,7 +106,7 @@
                   (map #(cstr/replace % #"_" "-"))
                   (cstr/join ".")
                   symbol)
-      :else nil)))
+      nil)))
 
 (defn run-cljfmt [files cwd]
   (let [cljfmt-result (sh "sh"
@@ -206,7 +206,9 @@
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
-        namespaces (map filename->namespace relative-files)]
+        namespaces (->> relative-files
+                        (map filename->namespace)
+                        (filter identity))]
     (->> linters
          (map #(case %
                  "eastwood" (run-eastwood dir runner namespaces)
