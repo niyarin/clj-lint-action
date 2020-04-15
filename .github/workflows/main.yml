@@ -21,7 +21,7 @@ jobs:
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v1
-    - uses: niyarin/clj-lint-action@v1.4
+    - uses: niyarin/clj-lint-action@v1.4.2
       with:
         linters: "\"all\""
         sourceroot: "\"lib\""
