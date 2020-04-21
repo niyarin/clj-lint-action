@@ -38,7 +38,7 @@
                                     :started_at (str (clj-time/now))})})]
     (get (cheshire/parse-string (:body post-result)) "id")))
 
-(defn update-action [id conclusion output]
+(defn update-action [id conclusion output max-annotation]
   (client/patch
    (str "https://api.github.com/repos/"
         (env :github-repository)
@@ -56,7 +56,7 @@
       :output
       {:title check-name
        :summary "Results of linters."
-       :annotations output}})}))
+       :annotations (take max-annotation output)}})}))
 
 (defn- get-files [dir]
   (let [files (sh "find" dir "-name" "*.clj" "-printf" "%P\n")]
@@ -194,6 +194,7 @@
                      :relative-dir ""
                      :mode :cli
                      :file-target :find
+                     :max-annotation 50
                      :runner :clojure})
 
 (defn- fix-option [option]
@@ -244,5 +245,5 @@
          lint-result (external-run parsed-option)
          conclusion (if (empty? lint-result) "success" "neutral")]
      (if (= (:mode parsed-option) :github-action)
-       (update-action id  conclusion lint-result)
+       (update-action id  conclusion lint-result (:max-annotation parsed-option))
        (output-lint-result lint-result)))))
