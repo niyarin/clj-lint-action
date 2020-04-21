@@ -221,15 +221,12 @@
                  "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
          (apply concat))))
 
-(defn external-run [arg-map]
-  (let [option (->> arg-map
-                    (merge default-option)
-                    fix-option)]
+(defn external-run [option]
     (run-linters (:linters option)
                  (join-path (:cwd option) (:relative-dir option))
                  (:relative-dir option)
                  (:file-target option)
-                 (:runner option))))
+                 (:runner option)))
 
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
@@ -240,10 +237,12 @@
 (defn -main
   ([] (-main (pr-str default-option)))
   ([arg-string]
-   (let [parsed-option (edn/read-string arg-string)
-         id (when (= (:mode parsed-option) :github-action) (start-action))
-         lint-result (external-run parsed-option)
+   (let [option (->> (edn/read-string arg-string)
+                     (merge default-option)
+                     fix-option)
+         id (when (= (:mode option) :github-action) (start-action))
+         lint-result (external-run option)
          conclusion (if (empty? lint-result) "success" "neutral")]
-     (if (= (:mode parsed-option) :github-action)
-       (update-action id  conclusion lint-result (:max-annotation parsed-option))
+     (if (= (:mode option) :github-action)
+       (update-action id  conclusion lint-result (:max-annotation option))
        (output-lint-result lint-result)))))
