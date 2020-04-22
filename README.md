@@ -8,7 +8,7 @@ Run some linters such as clj-kondo , kibit , eastwood and show results as warnin
 ```yaml
     steps:
     - uses: actions/checkout@v1
-    - uses: niyarin/clj-lint-action@v1.4.4
+    - uses: niyarin/clj-lint-action@v1.4.5
       with:
         linters: "\"all\""
         github_token: ${{ secrets.GITHUB_TOKEN }}
