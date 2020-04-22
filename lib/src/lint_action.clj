@@ -222,11 +222,11 @@
          (apply concat))))
 
 (defn external-run [option]
-    (run-linters (:linters option)
-                 (join-path (:cwd option) (:relative-dir option))
-                 (:relative-dir option)
-                 (:file-target option)
-                 (:runner option)))
+  (run-linters (:linters option)
+               (join-path (:cwd option) (:relative-dir option))
+               (:relative-dir option)
+               (:file-target option)
+               (:runner option)))
 
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
