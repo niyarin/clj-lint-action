@@ -7,7 +7,7 @@
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
-(def check-name "clj-lint check")
+(def check-name "clj-lint")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
                        :keyword-typos :local-shadows-var :misplaced-docstrings
@@ -70,10 +70,14 @@
                           cstr/split-lines
                           first
                           Integer/valueOf)]
+     (clojure.pprint/pprint ["COMMIt-count" commit-count])
     (if (< commit-count 2)
       (get-files dir)
       (->> (sh "sh" "-c" (str "cd " dir ";"
                               "git diff --name-only --relative HEAD HEAD~"))
+           ((fn [x]
+     (clojure.pprint/pprint x)
+               x))
            :out
            cstr/split-lines))))
 
@@ -195,6 +199,7 @@
                      :mode :cli
                      :file-target :find
                      :max-annotation 50
+                     :git-sha "HEAD~"
                      :runner :clojure})
 
 (defn- fix-option [option]
@@ -213,7 +218,8 @@
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
-     (clojure.pprint/pprint relative-files)
+     (clojure.pprint/pprint (map identity relative-files))
+     (clojure.pprint/pprint absolute-files)
     (->> linters
          (map #(case %
                  "eastwood" (run-eastwood dir runner namespaces)
@@ -244,6 +250,7 @@
          id (when (= (:mode option) :github-action) (start-action))
          lint-result (external-run option)
          conclusion (if (empty? lint-result) "success" "neutral")]
+      (clojure.pprint/pprint default-option)
      (if (= (:mode option) :github-action)
        (update-action id  conclusion lint-result (:max-annotation option))
        (output-lint-result lint-result)))))

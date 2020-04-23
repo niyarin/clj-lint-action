@@ -5,4 +5,4 @@ cd /lint-action-clj
 echo "??"
 echo ${GITHUB_SHA}
 
-clojure -m lint-action "{:linters $1 :cwd \"/github/workspace/\" :mode :github-action :relative-dir $2  :file-target :git :runner $3}"
+clojure -m lint-action "{:linters $1 :cwd \"/github/workspace/\" :mode :github-action :relative-dir $2  :file-target :git :runner $3 :git-sha {GITHUB_SHA}}"
