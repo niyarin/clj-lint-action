@@ -10,8 +10,7 @@
 (def check-name "clj-lint")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
-                       :keyword-typos :local-shadows-var :misplaced-docstrings
-                       :no-ns-form-found :redefd-vars
+                       :keyword-typos :local-shadows-var :misplaced-docstrings :no-ns-form-found :redefd-vars
                        :suspicious-expression :suspicious-test :unlimited-use
                        :unused-fn-args :unused-locals :unused-meta-on-macro
                        :unused-namespaces :unused-private-vars :unused-ret-vals
@@ -210,9 +209,10 @@
                 :else [k v])))
        (into {})))
 
-(defn- run-linters [linters dir relative-dir file-target runner]
+(defn- run-linters [{:keys [linters cwd relative-dir file-target runner git-sha]}]
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
-  (let [relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
+  (let [dir (join-path cwd relative-dir)
+        relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
         dir' (str dir "/")
         namespaces (->> relative-files
@@ -229,11 +229,7 @@
          (apply concat))))
 
 (defn external-run [option]
-  (run-linters (:linters option)
-               (join-path (:cwd option) (:relative-dir option))
-               (:relative-dir option)
-               (:file-target option)
-               (:runner option)))
+  (run-linters  option))
 
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
