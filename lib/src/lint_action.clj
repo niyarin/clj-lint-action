@@ -75,8 +75,7 @@
       (->> (sh "sh" "-c" (str "cd " dir ";"
                               "git diff --name-only --relative HEAD HEAD~"))
            :out
-           cstr/split-lines
-           ))))
+           cstr/split-lines))))
 
 (defn filename->namespace [filename]
   (let [splited-name (cstr/split (cstr/replace filename #".clj$" "")
@@ -217,14 +216,14 @@
      (clojure.pprint/pprint relative-files)
      (clojure.pprint/pprint (filter #(re-find #".clj$" %) relative-files))
     (when-not (empty? relative-files)
-      (->> linters
-           (map #(case %
-                   "eastwood" (run-eastwood dir runner namespaces)
-                   "kibit" (run-kibit dir relative-files relative-dir)
-                   "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
-                   "clj-kondo" (run-clj-kondo dir'
-                                              absolute-files relative-dir)))
-           (apply concat)))))
+    (->> linters
+         (map #(case %
+                 "eastwood" (run-eastwood dir runner namespaces)
+                 "kibit" (run-kibit dir relative-files relative-dir)
+                 "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
+                 "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
+         (apply concat))))
+  )
 
 (defn external-run [option]
   (run-linters (:linters option)
