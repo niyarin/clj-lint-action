@@ -7,7 +7,7 @@
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
-(def check-name "clj-lint")
+(def check-name "my-clj-lint-action check")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
                        :keyword-typos :local-shadows-var :misplaced-docstrings
@@ -22,7 +22,7 @@
   {"Content-Type" "application/json"
    "Accept" "application/vnd.github.antiope-preview+json"
    "Authorization" (str "Bearer " (env :input-github-token))
-   "User-Agent" "clj-lint"})
+   "User-Agent" "my-clj-lint-action"})
 
 (defn start-action []
   (let [post-result (client/post (str "https://api.github.com/repos/"
@@ -213,9 +213,6 @@
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
-     (clojure.pprint/pprint relative-files)
-     (clojure.pprint/pprint (filter #(re-find #".clj$" %) relative-files))
-    (when-not (empty? relative-files)
     (->> linters
          (map #(case %
                  "eastwood" (run-eastwood dir runner namespaces)
@@ -223,7 +220,6 @@
                  "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
                  "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
          (apply concat))))
-  )
 
 (defn external-run [option]
   (run-linters (:linters option)
