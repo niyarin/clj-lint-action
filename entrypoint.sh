@@ -1,5 +1,8 @@
 #!/bin/sh -l
 
+cd ${GITHUB_WORKSPACE}
+git log -n 5
+
 cd /lint-action-clj
 
 echo "??"

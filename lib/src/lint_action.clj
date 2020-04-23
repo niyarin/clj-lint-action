@@ -64,6 +64,7 @@
 
 (defn- get-diff-files [dir git-sha]
    (clojure.pprint/pprint (sh "sh" "-c" (str "cd " dir ";" "git diff --name-only --relative " git-sha)))
+   (clojure.pprint/pprint (sh "sh" "-c" (str "cd " dir ";" "git log")))
   (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
                                              "git log  --oneline --no-merges | wc -l"))
                           :out
