@@ -76,7 +76,7 @@
                               "git diff --name-only --relative HEAD HEAD~"))
            :out
            cstr/split-lines
-           (filter #(re-find #".clj$" %))))))
+           ))))
 
 (defn filename->namespace [filename]
   (let [splited-name (cstr/split (cstr/replace filename #".clj$" "")
@@ -215,6 +215,7 @@
                         (map filename->namespace)
                         (filter identity))]
      (clojure.pprint/pprint relative-files)
+     (clojure.pprint/pprint (filter #(re-find #".clj$" %) relative-files))
     (when-not (empty? relative-files)
       (->> linters
            (map #(case %
