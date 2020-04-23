@@ -7,7 +7,7 @@
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
-(def check-name "clj-lint")
+(def check-name "clj-lint action")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
                        :keyword-typos :local-shadows-var :misplaced-docstrings :no-ns-form-found :redefd-vars
@@ -63,6 +63,7 @@
       (cstr/split-lines (:out files)))))
 
 (defn- get-diff-files [dir]
+   (clojure.pprint/pprint (sh "sh" "-c" (str "cd " dir ";" "git log  --oneline --no-merges | wc -l")))
   (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
                                              "git log  --oneline --no-merges | wc -l"))
                           :out
@@ -229,6 +230,7 @@
          (apply concat))))
 
 (defn external-run [option]
+   (clojure.pprint/pprint option)
   (run-linters  option))
 
 (defn- output-lint-result [lint-result]
@@ -246,7 +248,7 @@
          id (when (= (:mode option) :github-action) (start-action))
          lint-result (external-run option)
          conclusion (if (empty? lint-result) "success" "neutral")]
-      (clojure.pprint/pprint default-option)
+      (clojure.pprint/pprint option)
      (if (= (:mode option) :github-action)
        (update-action id  conclusion lint-result (:max-annotation option))
        (output-lint-result lint-result)))))
