@@ -7,7 +7,7 @@
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
-(def check-name "lint")
+(def check-name "clj-lint")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
                        :keyword-typos :local-shadows-var :misplaced-docstrings
@@ -22,7 +22,7 @@
   {"Content-Type" "application/json"
    "Accept" "application/vnd.github.antiope-preview+json"
    "Authorization" (str "Bearer " (env :input-github-token))
-   "User-Agent" "lint"})
+   "User-Agent" "clj-lint"})
 
 (defn start-action []
   (let [post-result (client/post (str "https://api.github.com/repos/"
@@ -214,6 +214,7 @@
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
+     (clojure.pprint/pprint relative-files)
     (when-not (empty? relative-files)
       (->> linters
            (map #(case %
