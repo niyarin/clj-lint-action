@@ -7,7 +7,7 @@
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
-(def check-name "my-clj-lint-action check")
+(def check-name "lint")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
                        :keyword-typos :local-shadows-var :misplaced-docstrings
@@ -22,7 +22,7 @@
   {"Content-Type" "application/json"
    "Accept" "application/vnd.github.antiope-preview+json"
    "Authorization" (str "Bearer " (env :input-github-token))
-   "User-Agent" "my-clj-lint-action"})
+   "User-Agent" "lint"})
 
 (defn start-action []
   (let [post-result (client/post (str "https://api.github.com/repos/"
@@ -75,7 +75,8 @@
       (->> (sh "sh" "-c" (str "cd " dir ";"
                               "git diff --name-only --relative HEAD HEAD~"))
            :out
-           cstr/split-lines))))
+           cstr/split-lines
+           (filter #(re-find #".clj$" %))))))
 
 (defn filename->namespace [filename]
   (let [splited-name (cstr/split (cstr/replace filename #".clj$" "")
@@ -213,13 +214,15 @@
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
-    (->> linters
-         (map #(case %
-                 "eastwood" (run-eastwood dir runner namespaces)
-                 "kibit" (run-kibit dir relative-files relative-dir)
-                 "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
-                 "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
-         (apply concat))))
+    (when-not (empty? relative-files)
+      (->> linters
+           (map #(case %
+                   "eastwood" (run-eastwood dir runner namespaces)
+                   "kibit" (run-kibit dir relative-files relative-dir)
+                   "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
+                   "clj-kondo" (run-clj-kondo dir'
+                                              absolute-files relative-dir)))
+           (apply concat)))))
 
 (defn external-run [option]
   (run-linters (:linters option)

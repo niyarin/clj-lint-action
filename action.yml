@@ -1,4 +1,4 @@
-name: 'clj-lint-action check'
+name: 'lint'
 description: 'Get started with Container actions'
 author: 'niyarin'
 inputs:
