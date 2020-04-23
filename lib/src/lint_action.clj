@@ -7,7 +7,7 @@
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
-(def check-name "clj-lint")
+(def check-name "clj-lint action")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
                        :keyword-typos :local-shadows-var :misplaced-docstrings :no-ns-form-found :redefd-vars
@@ -62,7 +62,8 @@
     (when (zero? (:exit files))
       (cstr/split-lines (:out files)))))
 
-(defn- get-diff-files [dir]
+(defn- get-diff-files [dir git-sha]
+   (clojure.pprint/pprint (sh "sh" "-c" (str "cd " dir ";" "git diff --name-only --relative " git-sha)))
   (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
                                              "git log  --oneline --no-merges | wc -l"))
                           :out
@@ -212,7 +213,7 @@
 (defn- run-linters [{:keys [linters cwd relative-dir file-target runner git-sha]}]
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [dir (join-path cwd relative-dir)
-        relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
+        relative-files (if (= file-target :git) (get-diff-files dir git-sha) (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
         dir' (str dir "/")
         namespaces (->> relative-files
@@ -229,6 +230,7 @@
          (apply concat))))
 
 (defn external-run [option]
+   (clojure.pprint/pprint option)
   (run-linters  option))
 
 (defn- output-lint-result [lint-result]
@@ -246,7 +248,7 @@
          id (when (= (:mode option) :github-action) (start-action))
          lint-result (external-run option)
          conclusion (if (empty? lint-result) "success" "neutral")]
-      (clojure.pprint/pprint default-option)
+      (clojure.pprint/pprint option)
      (if (= (:mode option) :github-action)
        (update-action id  conclusion lint-result (:max-annotation option))
        (output-lint-result lint-result)))))
