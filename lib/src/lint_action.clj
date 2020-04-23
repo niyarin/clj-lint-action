@@ -7,11 +7,10 @@
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
-(def check-name "lint")
+(def check-name "clj-lint action")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
-                       :keyword-typos :local-shadows-var :misplaced-docstrings
-                       :no-ns-form-found :redefd-vars
+                       :keyword-typos :local-shadows-var :misplaced-docstrings :no-ns-form-found :redefd-vars
                        :suspicious-expression :suspicious-test :unlimited-use
                        :unused-fn-args :unused-locals :unused-meta-on-macro
                        :unused-namespaces :unused-private-vars :unused-ret-vals
@@ -22,7 +21,7 @@
   {"Content-Type" "application/json"
    "Accept" "application/vnd.github.antiope-preview+json"
    "Authorization" (str "Bearer " (env :input-github-token))
-   "User-Agent" "lint"})
+   "User-Agent" "clj-lint"})
 
 (defn start-action []
   (let [post-result (client/post (str "https://api.github.com/repos/"
@@ -63,7 +62,7 @@
     (when (zero? (:exit files))
       (cstr/split-lines (:out files)))))
 
-(defn- get-diff-files [dir]
+(defn- get-diff-files [dir git-sha]
   (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
                                              "git log  --oneline --no-merges | wc -l"))
                           :out
@@ -73,10 +72,9 @@
     (if (< commit-count 2)
       (get-files dir)
       (->> (sh "sh" "-c" (str "cd " dir ";"
-                              "git diff --name-only --relative HEAD HEAD~"))
+                              "git diff --name-only --relative HEAD~"))
            :out
-           cstr/split-lines
-           (filter #(re-find #".clj$" %))))))
+           cstr/split-lines))))
 
 (defn filename->namespace [filename]
   (let [splited-name (cstr/split (cstr/replace filename #".clj$" "")
@@ -195,7 +193,10 @@
                      :relative-dir ""
                      :mode :cli
                      :file-target :find
+                     :use-files false
+                     :files []
                      :max-annotation 50
+                     :git-sha "HEAD~"
                      :runner :clojure})
 
 (defn- fix-option [option]
@@ -206,30 +207,29 @@
                 :else [k v])))
        (into {})))
 
-(defn- run-linters [linters dir relative-dir file-target runner]
+(defn- run-linters [{:keys [linters cwd relative-dir file-target runner git-sha use-files files]}]
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
-  (let [relative-files (if (= file-target :git) (get-diff-files dir) (get-files dir))
+  (let [dir (join-path cwd relative-dir)
+        relative-files (cond
+                          use-files files
+                          (= file-target :git) (get-diff-files dir git-sha)
+                          :else (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
         dir' (str dir "/")
+        relative-dir (if (empty? relative-dir) "." relative-dir)
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
-    (when-not (empty? relative-files)
-      (->> linters
-           (map #(case %
-                   "eastwood" (run-eastwood dir runner namespaces)
-                   "kibit" (run-kibit dir relative-files relative-dir)
-                   "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
-                   "clj-kondo" (run-clj-kondo dir'
-                                              absolute-files relative-dir)))
-           (apply concat)))))
+    (->> linters
+         (map #(case %
+                 "eastwood" (run-eastwood dir runner namespaces)
+                 "kibit" (run-kibit dir relative-files relative-dir)
+                 "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
+                 "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
+         (apply concat))))
 
 (defn external-run [option]
-  (run-linters (:linters option)
-               (join-path (:cwd option) (:relative-dir option))
-               (:relative-dir option)
-               (:file-target option)
-               (:runner option)))
+  (run-linters  option))
 
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
