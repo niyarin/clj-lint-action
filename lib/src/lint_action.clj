@@ -63,22 +63,16 @@
       (cstr/split-lines (:out files)))))
 
 (defn- get-diff-files [dir git-sha]
-   (clojure.pprint/pprint (sh "sh" "-c" (str "cd " dir ";" "git diff --name-only --relative " git-sha)))
-   (clojure.pprint/pprint (sh "sh" "-c" (str "cd " dir ";" "git log")))
   (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
                                              "git log  --oneline --no-merges | wc -l"))
                           :out
                           cstr/split-lines
                           first
                           Integer/valueOf)]
-     (clojure.pprint/pprint ["COMMIt-count" commit-count])
     (if (< commit-count 2)
       (get-files dir)
       (->> (sh "sh" "-c" (str "cd " dir ";"
-                              "git diff --name-only --relative HEAD HEAD~"))
-           ((fn [x]
-     (clojure.pprint/pprint x)
-               x))
+                              "git diff --name-only --relative HEAD~"))
            :out
            cstr/split-lines))))
 
@@ -199,6 +193,8 @@
                      :relative-dir ""
                      :mode :cli
                      :file-target :find
+                     :use-files false
+                     :files []
                      :max-annotation 50
                      :git-sha "HEAD~"
                      :runner :clojure})
@@ -211,17 +207,19 @@
                 :else [k v])))
        (into {})))
 
-(defn- run-linters [{:keys [linters cwd relative-dir file-target runner git-sha]}]
+(defn- run-linters [{:keys [linters cwd relative-dir file-target runner git-sha use-files files]}]
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [dir (join-path cwd relative-dir)
-        relative-files (if (= file-target :git) (get-diff-files dir git-sha) (get-files dir))
+        relative-files (cond
+                          use-files files
+                          (= file-target :git) (get-diff-files dir git-sha)
+                          :else (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
         dir' (str dir "/")
+        relative-dir (if (empty? relative-dir) "." relative-dir)
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
-     (clojure.pprint/pprint (map identity relative-files))
-     (clojure.pprint/pprint absolute-files)
     (->> linters
          (map #(case %
                  "eastwood" (run-eastwood dir runner namespaces)
@@ -231,7 +229,6 @@
          (apply concat))))
 
 (defn external-run [option]
-   (clojure.pprint/pprint option)
   (run-linters  option))
 
 (defn- output-lint-result [lint-result]

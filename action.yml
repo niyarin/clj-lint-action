@@ -14,6 +14,12 @@ inputs:
   github_token:
     description: 'Github token to report linter results back to check'
     required: true
+  usefiles:
+      description: 'if use files set "true" '
+      default: "false"
+  files:
+      decription: 'file list such as ["xxxxx" "yyyyy"]'
+      default: "[]"
 runs:
   using: 'docker'
   image: 'Dockerfile'
@@ -21,3 +27,5 @@ runs:
     - ${{ inputs.linters }}
     - ${{ inputs.sourceroot }}
     - ${{ inputs.runner }}
+    - ${{ inputs.usefiles }}
+    - ${{ inputs.files }}
