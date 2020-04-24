@@ -74,7 +74,8 @@
       (->> (sh "sh" "-c" (str "cd " dir ";"
                               "git diff --name-only --relative " git-sha))
            :out
-           cstr/split-lines))))
+           cstr/split-lines
+           (filter #(re-matches #"--- a(.*clj)$" %))))))
 
 (defn- filename->namespace [filename]
   (let [splited-name (cstr/split (cstr/replace filename #".clj$" "")
