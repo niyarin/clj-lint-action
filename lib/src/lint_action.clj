@@ -23,7 +23,7 @@
    "Authorization" (str "Bearer " (env :input-github-token))
    "User-Agent" "clj-lint"})
 
-(defn start-action []
+(defn- start-action []
   (let [post-result (client/post (str "https://api.github.com/repos/"
                                       (env :github-repository)
                                       "/check-runs")
@@ -37,7 +37,7 @@
                                     :started_at (str (clj-time/now))})})]
     (get (cheshire/parse-string (:body post-result)) "id")))
 
-(defn update-action [id conclusion output max-annotation]
+(defn- update-action [id conclusion output max-annotation]
   (client/patch
    (str "https://api.github.com/repos/"
         (env :github-repository)
@@ -72,11 +72,11 @@
     (if (< commit-count 2)
       (get-files dir)
       (->> (sh "sh" "-c" (str "cd " dir ";"
-                              "git diff --name-only --relative HEAD~"))
+                              "git diff --name-only --relative " git-sha))
            :out
            cstr/split-lines))))
 
-(defn filename->namespace [filename]
+(defn- filename->namespace [filename]
   (let [splited-name (cstr/split (cstr/replace filename #".clj$" "")
                                  #"/")]
     (case (first splited-name)
@@ -97,7 +97,7 @@
        (apply concat)
        (cstr/join "/")))
 
-(defn run-clj-kondo [dir files relative-dir]
+(defn- run-clj-kondo [dir files relative-dir]
   (let [kondo-result (apply sh (concat ["/usr/local/bin/clj-kondo" "--lint"]  files))
         result-lines
         (when (or (= (:exit kondo-result) 2) (= (:exit kondo-result) 3))
@@ -113,7 +113,7 @@
                    (str "[clj-kondo]" (nth matches 5))})))
          (filter identity))))
 
-(defn run-cljfmt [files cwd relative-dir]
+(defn- run-cljfmt [files cwd relative-dir]
   (let [cljfmt-result (sh "sh"
                           "-c"
                           (str
@@ -132,7 +132,7 @@
                      :annotation_level "warning"
                      :message (str "[cljfmt] cljfmt fail." file)})))))))
 
-(defn run-eastwood-clj [dir namespaces]
+(defn- run-eastwood-clj [dir namespaces]
   (sh "sh" "-c"
       (str
        "cd " dir ";"
@@ -143,7 +143,7 @@
                         :linters eastwood-linters
                         :namespaces namespaces})))))
 
-(defn run-eastwood-lein [dir namespaces]
+(defn- run-eastwood-lein [dir namespaces]
   (sh "sh" "-c"
       (str "cd " dir ";"
            "lein "
@@ -152,7 +152,7 @@
            " -- eastwood "
            (pr-str (pr-str {:namespaces (vec namespaces)})))))
 
-(defn run-eastwood [dir runner namespaces]
+(defn- run-eastwood [dir runner namespaces]
   (let [eastwood-result (if (= runner :leiningen) (run-eastwood-lein dir namespaces) (run-eastwood-clj dir namespaces))]
     (->> (cstr/split-lines (:out eastwood-result))
          (map (fn [line]
@@ -167,7 +167,7 @@
                      :message message}))))
          (filter identity))))
 
-(defn run-kibit [dir files relative-dir]
+(defn- run-kibit [dir files relative-dir]
   (let [kibit-result (sh
                       "sh" "-c"
                       (str
@@ -211,7 +211,7 @@
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [dir (join-path cwd relative-dir)
         relative-files (cond
-                          use-files files
+                          use-files (filter #(re-find #".clj$" %) files)
                           (= file-target :git) (get-diff-files dir git-sha)
                           :else (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
@@ -220,15 +220,16 @@
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
-    (->> linters
-         (map #(case %
-                 "eastwood" (run-eastwood dir runner namespaces)
-                 "kibit" (run-kibit dir relative-files relative-dir)
-                 "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
-                 "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
-         (apply concat))))
+     (when (seq relative-files)
+       (->> linters
+            (map #(case %
+                    "eastwood" (run-eastwood dir runner namespaces)
+                    "kibit" (run-kibit dir relative-files relative-dir)
+                    "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
+                    "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
+            (apply concat)))))
 
-(defn external-run [option]
+(defn- external-run [option]
   (run-linters  option))
 
 (defn- output-lint-result [lint-result]
