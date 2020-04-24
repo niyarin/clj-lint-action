@@ -7,12 +7,17 @@ Run some linters such as clj-kondo , kibit , eastwood and show results as warnin
 
 ```yaml
     steps:
-    - uses: actions/checkout@v1
-    - uses: niyarin/clj-lint-action@v1.4.5
+    - id: file_changes
+      uses: trilom/file-changes-action@v1.2.3
+    - uses: actions/checkout@v2
+    - uses: niyarin/clj-lint-action@v1.5.2
       with:
         linters: "\"all\""
+        sourceroot: "\"lib\""
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        runner: :leiningen
+        runner: ":leiningen"
+        usefiles: "true"
+        files: ${{ steps.file_changes.outputs.files}}
 ```
 
 ## about 'linters'
