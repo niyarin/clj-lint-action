@@ -18,8 +18,8 @@ inputs:
       description: 'if use files set "true" '
       default: "false"
   files:
-      decription: 'file list such as ["xxxxx" "yyyyy"]'
-      default: "[]"
+      decription: 'file list such as "xxxxx yyyyy"'
+      default: ""
 runs:
   using: 'docker'
   image: 'Dockerfile'

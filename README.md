@@ -7,17 +7,19 @@ Run some linters such as clj-kondo , kibit , eastwood and show results as warnin
 
 ```yaml
     steps:
-    - id: file_changes
-      uses: trilom/file-changes-action@v1.2.3
     - uses: actions/checkout@v2
-    - uses: niyarin/clj-lint-action@v1.5.2
+    - uses: technote-space/get-diff-action@v1
+      id: git_diff
+      with:
+        SUFFIX_FILTER: .clj
+        SEPARATOR: ' '
+    - uses: niyarin/clj-lint-action@v1.6.1
       with:
         linters: "\"all\""
-        sourceroot: "\"lib\""
         github_token: ${{ secrets.GITHUB_TOKEN }}
         runner: ":leiningen"
         usefiles: "true"
-        files: ${{ steps.file_changes.outputs.files}}
+        files:  ${{ steps.git_diff.outputs.diff }}
 ```
 
 ## about 'linters'
