@@ -213,23 +213,23 @@
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [dir (join-path cwd relative-dir)
         relative-files (cond
-                          use-files (filter #(re-find #".clj$" %) files)
-                          (= file-target :git) (get-diff-files dir git-sha)
-                          :else (get-files dir))
+                         use-files (filter #(re-find #".clj$" %) files)
+                         (= file-target :git) (get-diff-files dir git-sha)
+                         :else (get-files dir))
         absolute-files (map #(join-path dir %) relative-files)
         dir' (str dir "/")
         relative-dir (if (empty? relative-dir) "." relative-dir)
         namespaces (->> relative-files
                         (map filename->namespace)
                         (filter identity))]
-     (when (seq relative-files)
-       (->> linters
-            (map #(case %
-                    "eastwood" (run-eastwood dir runner namespaces eastwood-linters)
-                    "kibit" (run-kibit dir relative-files relative-dir)
-                    "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
-                    "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
-            (apply concat)))))
+    (when (seq relative-files)
+      (->> linters
+           (map #(case %
+                   "eastwood" (run-eastwood dir runner namespaces eastwood-linters)
+                   "kibit" (run-kibit dir relative-files relative-dir)
+                   "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
+                   "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
+           (apply concat)))))
 
 (defn- external-run [option]
   (run-linters  option))
@@ -243,12 +243,14 @@
 (defn -main
   ([] (-main (pr-str default-option)))
   ([arg-string]
+   (clojure.pprint/pprint arg-string)
    (let [option (->> (edn/read-string arg-string)
                      (merge default-option)
                      fix-option)
          id (when (= (:mode option) :github-action) (start-action))
          lint-result (external-run option)
          conclusion (if (empty? lint-result) "success" "neutral")]
+     (clojure.pprint/pprint option)
      (if (= (:mode option) :github-action)
        (update-action id  conclusion lint-result (:max-annotation option))
        (output-lint-result lint-result)))))
