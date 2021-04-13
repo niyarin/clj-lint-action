@@ -10,7 +10,8 @@
 (def check-name "clj-lint action")
 
 (def eastwood-linters [:bad-arglists :constant-test :def-in-def :deprecations
-                       :keyword-typos :local-shadows-var :misplaced-docstrings :no-ns-form-found :redefd-vars
+                       :keyword-typos :local-shadows-var :misplaced-docstrings
+                       :no-ns-form-found :redefd-vars
                        :suspicious-expression :suspicious-test :unlimited-use
                        :unused-fn-args :unused-locals :unused-meta-on-macro
                        :unused-namespaces :unused-private-vars :unused-ret-vals
@@ -24,38 +25,55 @@
    "User-Agent" "clj-lint"})
 
 (defn- start-action []
-  (let [post-result (client/post (str "https://api.github.com/repos/"
-                                      (env :github-repository)
-                                      "/check-runs")
-                                 {:headers (make-header)
-                                  :content-type :json
-                                  :body
-                                  (cheshire/generate-string
-                                   {:name check-name
-                                    :head_sha (env :github-sha)
-                                    :status "in_progress"
-                                    :started_at (str (clj-time/now))})})]
+  (let [url (str "https://api.github.com/repos/"
+                 (env :github-repository) "/check-runs")
+        body (cheshire/generate-string
+              {:name check-name
+               :head_sha (env :github-sha)
+               :status "in_progress"
+               :started_at (str (clj-time/now))})
+        post-result
+        (try (client/post url
+                          {:headers (make-header)
+                           :content-type :json
+                           :body body})
+             (catch Exception e
+               (binding [*out* *err*]
+                 (println ["HTTP ERROR"
+                           (:status (ex-data e))
+                           "Creating the check run."
+                           {:url url
+                            :token (env :input-github-token)
+                            :body body}]))
+               (System/exit 1)))]
     (get (cheshire/parse-string (:body post-result)) "id")))
 
 (defn- update-action [id conclusion output max-annotation]
-  (client/patch
-   (str "https://api.github.com/repos/"
-        (env :github-repository)
-        "/check-runs/"
-        id)
-   {:headers (make-header)
-    :content-type :json
-    :body
-    (cheshire/generate-string
-     {:name check-name
-      :head_sha (env :github-sha)
-      :status "completed"
-      :completed_at (str (clj-time/now))
-      :conclusion conclusion
-      :output
-      {:title check-name
-       :summary "Results of linters."
-       :annotations (take max-annotation output)}})}))
+  (let [url (str "https://api.github.com/repos/"
+                 (env :github-repository) "/check-runs/" id)
+        body
+        (cheshire/generate-string
+         {:name check-name
+          :head_sha (env :github-sha)
+          :status "completed"
+          :completed_at (str (clj-time/now))
+          :conclusion conclusion
+          :output
+          {:title check-name
+           :summary "Results of linters."
+           :annotations (take max-annotation output)}})]
+    (try (client/patch url {:headers (make-header)
+                            :content-type :json
+                            :body body})
+         (catch Exception e
+           (binding [*out* *err*]
+             (println ["HTTP ERROR"
+                       (:status (ex-data e))
+                       "update the check run."
+                       {:url url
+                        :token (env :input-github-token)
+                        :body body}]))
+           (System/exit 1)))))
 
 (defn- get-files [dir]
   (let [files (sh "find" dir "-name" "*.clj" "-printf" "%P\n")]
@@ -63,8 +81,12 @@
       (cstr/split-lines (:out files)))))
 
 (defn- get-diff-files [dir git-sha]
-  (let [commit-count (->> (sh "sh" "-c" (str "cd " dir ";"
-                                             "git log  --oneline --no-merges | wc -l"))
+  (let [commit-count (->> (sh "sh"
+                              "-c"
+                              (str "cd "
+                                   dir
+                                   ";"
+                                   "git log  --oneline --no-merges | wc -l"))
                           :out
                           cstr/split-lines
                           first
@@ -98,27 +120,35 @@
        (apply concat)
        (cstr/join "/")))
 
-(defn- run-clj-kondo [dir files relative-dir]
-  (let [kondo-result (apply sh (concat ["/usr/local/bin/clj-kondo" "--lint"]  files))
+(defn- run-clj-kondo [dir relative-files relative-dir]
+  (let [kondo-result
+        (sh "sh" "-c"
+            (str "cd " dir ";"
+                 "/usr/local/bin/clj-kondo " "--lint "
+                 (cstr/join \: relative-files)))
         result-lines
         (when (or (= (:exit kondo-result) 2) (= (:exit kondo-result) 3))
           (cstr/split-lines (:out kondo-result)))]
     (->> result-lines
-         (map (fn [line]
-                (when-let [matches (re-matches #"^(.*?)\:(\d*?)\:(\d*?)\:([a-z ]*)\:(.*)" line)]
-                  {:path (str relative-dir "/" (subs (second matches) (count dir)))
-                   :start_line (Integer/valueOf (nth matches 2))
-                   :end_line (Integer/valueOf (nth matches 2))
-                   :annotation_level "warning"
-                   :message
-                   (str "[clj-kondo]" (nth matches 5))})))
-         (filter identity))))
+         (keep (fn [line]
+                 (when-let
+                  [matches (re-matches
+                            #"^(.*?)\:(\d*?)\:(\d*?)\:([a-z ]*)\:(.*)"
+                            line)]
+                   {:path (str relative-dir "/" (second matches))
+                    :start_line (Integer/valueOf (nth matches 2))
+                    :end_line (Integer/valueOf (nth matches 2))
+                    :annotation_level "warning"
+                    :message
+                    (str "[clj-kondo]" (nth matches 5))}))))))
 
 (defn- run-cljfmt [files cwd relative-dir]
   (let [cljfmt-result (sh "sh"
                           "-c"
                           (str
-                           "clojure -Sdeps \"{:deps {cljfmt {:mvn/version \\\"RELEASE\\\" }}}\" -m cljfmt.main check "
+                           "clojure -Sdeps \"{:deps {cljfmt "
+                           "{:mvn/version \\\"RELEASE\\\" }}}\" "
+                           " -m cljfmt.main check "
                            (cstr/join " " files)))]
     (when-not (zero? (:exit cljfmt-result))
       (->> (:err cljfmt-result)
@@ -138,7 +168,8 @@
       (str
        "cd " dir ";"
        "clojure "
-       "-Sdeps " "\" {:deps {jonase/eastwood {:mvn/version \\\"RELEASE\\\" }}}\" "
+       "-Sdeps " "\" {:deps {jonase/eastwood "
+       "{:mvn/version \\\"RELEASE\\\" }}}\" "
        " -m  " "eastwood.lint "
        (pr-str (pr-str {:source-paths ["src"]
                         :linters linters
@@ -154,10 +185,14 @@
            (pr-str (pr-str {:namespaces (vec namespaces)})))))
 
 (defn- run-eastwood [dir runner namespaces linters]
-  (let [eastwood-result (if (= runner :leiningen) (run-eastwood-lein dir namespaces linters) (run-eastwood-clj dir namespaces linters))]
+  (let [eastwood-result (if (= runner :leiningen)
+                          (run-eastwood-lein dir namespaces linters)
+                          (run-eastwood-clj dir namespaces linters))]
     (->> (cstr/split-lines (:out eastwood-result))
          (map (fn [line]
-                (when-let [matches (re-matches #"^(.*?)\:(\d*?)\:(\d*?)\:(.*?)\:(.*)" line)]
+                (when-let [matches
+                           (re-matches #"^(.*?)\:(\d*?)\:(\d*?)\:(.*?)\:(.*)"
+                                       line)]
                   (let [message (str "[eastwood]"
                                      "[" (cstr/trim (nth matches 4)) "]"
                                      (nth matches 5))]
@@ -174,14 +209,17 @@
                       (str
                        "cd " dir ";"
                        "clojure "
-                       "-Sdeps " "\" {:deps {tvaughan/kibit-runner {:mvn/version \\\"RELEASE\\\" }}}\" "
+                       "-Sdeps "
+                       "\" {:deps {tvaughan/kibit-runner "
+                       "{:mvn/version \\\"RELEASE\\\" }}}\" "
                        " -m  " "kibit-runner.cmdline " (cstr/join " " files)))]
     (->> (cstr/split (:out kibit-result) #"\n\n")
          (map (fn [line]
                 (let [message-lines (cstr/split-lines line)
                       first-line (first message-lines)
                       message (cstr/join "\n" (next message-lines))]
-                  (when-let [line-decompose (re-matches #"At (.*?):(\d*?):$" first-line)]
+                  (when-let [line-decompose
+                             (re-matches #"At (.*?):(\d*?):$" first-line)]
                     {:path (join-path relative-dir (second line-decompose))
                      :start_line (Integer/valueOf (nth line-decompose 2))
                      :annotation_level "warning"
@@ -205,11 +243,13 @@
   (->> option
        (map (fn [[k v]]
               (cond
-                (= [k v] [:linters "all"]) [:linters ["eastwood" "cljfmt" "kibit" "clj-kondo"]]
+                (= [k v] [:linters "all"])
+                [:linters ["eastwood" "cljfmt" "kibit" "clj-kondo"]]
                 :else [k v])))
        (into {})))
 
-(defn- run-linters [{:keys [linters cwd relative-dir file-target runner git-sha use-files files eastwood-linters]}]
+(defn- run-linters [{:keys [linters cwd relative-dir file-target runner
+                            git-sha use-files files eastwood-linters]}]
   (when-not (coll? linters) (throw (ex-info "Invalid linters." {})))
   (let [dir (join-path cwd relative-dir)
         relative-files (cond
@@ -223,13 +263,13 @@
                         (map filename->namespace)
                         (filter identity))]
     (when (seq relative-files)
-      (->> linters
-           (map #(case %
-                   "eastwood" (run-eastwood dir runner namespaces eastwood-linters)
-                   "kibit" (run-kibit dir relative-files relative-dir)
-                   "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
-                   "clj-kondo" (run-clj-kondo dir' absolute-files relative-dir)))
-           (apply concat)))))
+      (mapcat #(case %
+                 "eastwood"
+                 (run-eastwood dir runner namespaces eastwood-linters)
+                 "kibit" (run-kibit dir relative-files relative-dir)
+                 "cljfmt" (run-cljfmt absolute-files dir' relative-dir)
+                 "clj-kondo" (run-clj-kondo dir relative-files relative-dir))
+              linters))))
 
 (defn- external-run [option]
   (run-linters  option))
