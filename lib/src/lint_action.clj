@@ -43,12 +43,15 @@
                            (:status (ex-data e))
                            "Creating the check run."
                            {:url url
+                            :taken2 (take 3 (env :input-github-token))
                             :token (env :input-github-token)
                             :body body}]))
                (if (pos? n)
-                 (do (Thread/sleep 1000) (start-action* (dec n)))
+                 (do (Thread/sleep 3500) (start-action* (dec n)))
                  (System/exit 1))))]
-    (println ["SUCCESS" {:url url :token (env :input-github-token) :body body}])
+    (println ["SUCCESS" {:url url :token (env :input-github-token)
+                         :taken2 (take 3 (env :input-github-token))
+                         :body body}])
     (get (cheshire/parse-string (:body post-result)) "id")))
 
 (defn- start-action [] (start-action* 3))
