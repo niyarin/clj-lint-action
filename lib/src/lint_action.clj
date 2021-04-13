@@ -38,7 +38,7 @@
                            :content-type :json
                            :body body})
              (catch Exception e
-               (do;binding [*out* *err*]
+               (binding [*out* *err*]
                  (println ["HTTP ERROR"
                            (:status (ex-data e))
                            "Creating the check run."
@@ -66,7 +66,7 @@
                             :content-type :json
                             :body body})
          (catch Exception e
-           (do;binding [*out* *err*]
+           (binding [*out* *err*]
              (println ["HTTP ERROR"
                        (:status (ex-data e))
                        "update the check run."
