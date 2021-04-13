@@ -24,7 +24,7 @@
    "Authorization" (str "Bearer " (env :input-github-token))
    "User-Agent" "clj-lint"})
 
-(defn- start-action []
+(defn- start-action* [n]
   (let [url (str "https://api.github.com/repos/"
                  (env :github-repository) "/check-runs")
         body (cheshire/generate-string
@@ -45,8 +45,13 @@
                            {:url url
                             :token (env :input-github-token)
                             :body body}]))
-               (System/exit 1)))]
+               (if (pos? n)
+                 (do (Thread/sleep 1000) (start-action* (dec n)))
+                 (System/exit 1))))]
+    (println ["SUCCESS" {:url url :token (env :input-github-token) :body body}])
     (get (cheshire/parse-string (:body post-result)) "id")))
+
+(defn- start-action [] (start-action* 3))
 
 (defn- update-action [id conclusion output max-annotation]
   (let [url (str "https://api.github.com/repos/"
