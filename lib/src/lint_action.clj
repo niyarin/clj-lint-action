@@ -45,7 +45,8 @@
                            {:url url
                             :taken2 (take 3 (env :input-github-token))
                             :token (env :input-github-token)
-                            :body body}]))
+                            :body body}])
+                 (clojure.pprint/pprint e))
                (if (pos? n)
                  (do (Thread/sleep 3500) (start-action* (dec n)))
                  (System/exit 1))))]
