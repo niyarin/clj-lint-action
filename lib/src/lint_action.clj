@@ -279,7 +279,7 @@
   (run-linters  option))
 
 (defn- convert-message-for-workflow [message]
-  (cstr/replace message #"\n" "<br>"))
+  (cstr/replace message #"\n" "\\n"))
 
 
 (defn- print-workflow-warning [lint-result]
