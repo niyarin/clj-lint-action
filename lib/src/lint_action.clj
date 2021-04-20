@@ -24,7 +24,7 @@
    "Authorization" (str "Bearer " (env :input-github-token))
    "User-Agent" "clj-lint"})
 
-(defn- start-action* [n]
+(defn- start-action []
   (let [url (str "https://api.github.com/repos/"
                  (env :github-repository) "/check-runs")
         body (cheshire/generate-string
@@ -45,17 +45,12 @@
                            {:url url
                             :taken2 (take 3 (env :input-github-token))
                             :token (env :input-github-token)
-                            :body body}])
-                 (clojure.pprint/pprint e))
-               (if (pos? n)
-                 (do (Thread/sleep 3500) (start-action* (dec n)))
-                 (System/exit 1))))]
+                            :body body}]))
+                (System/exit 1)))]
     (println ["SUCCESS" {:url url :token (env :input-github-token)
                          :taken2 (take 3 (env :input-github-token))
                          :body body}])
     (get (cheshire/parse-string (:body post-result)) "id")))
-
-(defn- start-action [] (start-action* 3))
 
 (defn- update-action [id conclusion output max-annotation]
   (let [url (str "https://api.github.com/repos/"
@@ -283,6 +278,13 @@
 (defn- external-run [option]
   (run-linters  option))
 
+(defn- print-workflow-warning [lint-result]
+  (doseq [annotation lint-result]
+    (println (format "::warning file=%s,line=%d::%s"
+                     (:path annotation)
+                     (:start-line annotation)
+                     (:message annotation)))))
+
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
     (println (format "%s:%d" (:path annotation) (:start_line annotation)))
@@ -295,9 +297,10 @@
    (let [option (->> (edn/read-string arg-string)
                      (merge default-option)
                      fix-option)
-         id (when (= (:mode option) :github-action) (start-action))
+         id '(when (= (:mode option) :github-action) (start-action))
          lint-result (external-run option)
          conclusion (if (empty? lint-result) "success" "neutral")]
      (if (= (:mode option) :github-action)
-       (update-action id  conclusion lint-result (:max-annotation option))
+       ;(update-action id  conclusion lint-result (:max-annotation option))
+       (print-workflow-warning (take (:max-annotation option) lint-result))
        (output-lint-result lint-result)))))
