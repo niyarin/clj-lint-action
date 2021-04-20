@@ -279,8 +279,7 @@
   (run-linters  option))
 
 (defn- convert-message-for-workflow [message]
-  (cstr/replace message #"\n" "\\n"))
-
+  (cstr/replace message #"\n" "\\\n"))
 
 (defn- print-workflow-warning [lint-result]
   (doseq [annotation lint-result]
@@ -301,10 +300,12 @@
    (let [option (->> (edn/read-string arg-string)
                      (merge default-option)
                      fix-option)
-         id '(when (= (:mode option) :github-action) (start-action))
+         ;id '(when (= (:mode option) :github-action) (start-action))
          lint-result (external-run option)
          conclusion (if (empty? lint-result) "success" "neutral")]
      (if (= (:mode option) :github-action)
        ;(update-action id  conclusion lint-result (:max-annotation option))
-       (print-workflow-warning (take (:max-annotation option) lint-result))
+       (do (print-workflow-warning (take (:max-annotation option) lint-result))
+           (clojure.pprint/pprint lint-result)
+           (when (seq lint-result) (System/exit 78)))
        (output-lint-result lint-result)))))
