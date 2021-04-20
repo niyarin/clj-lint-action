@@ -278,12 +278,16 @@
 (defn- external-run [option]
   (run-linters  option))
 
+(defn- convert-message-for-workflow [message]
+  (cstr/replace message #"\n" "<br>"))
+
+
 (defn- print-workflow-warning [lint-result]
   (doseq [annotation lint-result]
-    (println (format "::warning file=%s,line=%d::%s"
+    (println (format "::warning file=%s,line=%d,col=1::%s"
                      (:path annotation)
                      (:start-line annotation)
-                     (:message annotation)))))
+                     (convert-message-for-workflow (:message annotation))))))
 
 (defn- output-lint-result [lint-result]
   (doseq [annotation lint-result]
