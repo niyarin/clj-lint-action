@@ -279,7 +279,7 @@
   (run-linters  option))
 
 (defn- convert-message-for-workflow [message]
-  (cstr/replace message #"\n" "\\\n"))
+  (cstr/replace message #"\n" " "))
 
 (defn- print-workflow-warning [lint-result]
   (doseq [annotation lint-result]
@@ -307,5 +307,6 @@
        ;(update-action id  conclusion lint-result (:max-annotation option))
        (do (print-workflow-warning (take (:max-annotation option) lint-result))
            (clojure.pprint/pprint lint-result)
-           (when (seq lint-result) (System/exit 78)))
+           ;(when (seq lint-result) (System/exit 78))
+           )
        (output-lint-result lint-result)))))
