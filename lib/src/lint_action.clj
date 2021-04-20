@@ -1,9 +1,5 @@
 (ns lint-action
-  (:require [cheshire.core :as cheshire]
-            [environ.core :refer [env]]
-            [clj-http.client :as client]
-            [clj-time.core :as clj-time]
-            [clojure.string :as cstr]
+  (:require [clojure.string :as cstr]
             [clojure.edn :as edn]
             [clojure.java.shell :refer [sh]]))
 
@@ -17,67 +13,6 @@
                        :unused-namespaces :unused-private-vars :unused-ret-vals
                        :unused-ret-vals-in-try :wrong-arity :wrong-ns-form
                        :wrong-pre-post :wrong-tag])
-
-(defn- make-header []
-  {"Content-Type" "application/json"
-   "Accept" "application/vnd.github.antiope-preview+json"
-   "Authorization" (str "Bearer " (env :input-github-token))
-   "User-Agent" "clj-lint"})
-
-(defn- start-action []
-  (let [url (str "https://api.github.com/repos/"
-                 (env :github-repository) "/check-runs")
-        body (cheshire/generate-string
-              {:name check-name
-               :head_sha (env :github-sha)
-               :status "in_progress"
-               :started_at (str (clj-time/now))})
-        post-result
-        (try (client/post url
-                          {:headers (make-header)
-                           :content-type :json
-                           :body body})
-             (catch Exception e
-               (binding [*out* *err*]
-                 (println ["HTTP ERROR"
-                           (:status (ex-data e))
-                           "Creating the check run."
-                           {:url url
-                            :taken2 (take 3 (env :input-github-token))
-                            :token (env :input-github-token)
-                            :body body}]))
-                (System/exit 1)))]
-    (println ["SUCCESS" {:url url :token (env :input-github-token)
-                         :taken2 (take 3 (env :input-github-token))
-                         :body body}])
-    (get (cheshire/parse-string (:body post-result)) "id")))
-
-(defn- update-action [id conclusion output max-annotation]
-  (let [url (str "https://api.github.com/repos/"
-                 (env :github-repository) "/check-runs/" id)
-        body
-        (cheshire/generate-string
-         {:name check-name
-          :head_sha (env :github-sha)
-          :status "completed"
-          :completed_at (str (clj-time/now))
-          :conclusion conclusion
-          :output
-          {:title check-name
-           :summary "Results of linters."
-           :annotations (take max-annotation output)}})]
-    (try (client/patch url {:headers (make-header)
-                            :content-type :json
-                            :body body})
-         (catch Exception e
-           (binding [*out* *err*]
-             (println ["HTTP ERROR"
-                       (:status (ex-data e))
-                       "update the check run."
-                       {:url url
-                        :token (env :input-github-token)
-                        :body body}]))
-           (System/exit 1)))))
 
 (defn- get-files [dir]
   (let [files (sh "find" dir "-name" "*.clj" "-printf" "%P\n")]
@@ -300,13 +235,8 @@
    (let [option (->> (edn/read-string arg-string)
                      (merge default-option)
                      fix-option)
-         ;id '(when (= (:mode option) :github-action) (start-action))
-         lint-result (external-run option)
-         conclusion (if (empty? lint-result) "success" "neutral")]
+         lint-result (external-run option)]
      (if (= (:mode option) :github-action)
-       ;(update-action id  conclusion lint-result (:max-annotation option))
        (do (print-workflow-warning (take (:max-annotation option) lint-result))
-           (clojure.pprint/pprint lint-result)
-           ;(when (seq lint-result) (System/exit 78))
-           )
+           (when (seq lint-result) (System/exit 1)))
        (output-lint-result lint-result)))))

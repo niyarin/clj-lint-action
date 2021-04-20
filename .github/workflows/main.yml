@@ -20,7 +20,7 @@ jobs:
     - id: file_changes
       uses: trilom/file-changes-action@v1.2.3
     - uses: actions/checkout@v2
-    - uses: niyarin/clj-lint-action@v1.5.2
+    - uses: niyarin/clj-lint-action@v1.7.9
       with:
         linters: "\"all\""
         sourceroot: "\"lib\""
